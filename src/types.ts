@@ -17,9 +17,12 @@ export interface Policy {
   };
   deny: {
     commands: string[];
+    read: string[];
+    write: string[];
   };
   requireManual: {
     commands: string[];
+    write: string[];
   };
   aiReply: {
     enabled: boolean;

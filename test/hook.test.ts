@@ -45,10 +45,16 @@ test('processHookInput blocks denylisted command', () => {
   assert.equal(hookOut.permissionDecision, 'deny');
 });
 
-test('processHookInput passes unknown through to user', () => {
+test('processHookInput passes unknown through to user when allow list is empty', () => {
+  const strictPolicy = {
+    ...DEFAULT_POLICY,
+    mode: 'quick' as const,
+    allow: { commands: [], read: [], write: [] },
+    aiReply: { ...DEFAULT_POLICY.aiReply, enabled: false }
+  };
   const out = processHookInput(
     { tool_name: 'Bash', tool_input: { command: 'some-rare-tool --flag' } },
-    { cwd: '/tmp', policy: { ...DEFAULT_POLICY, mode: 'quick', aiReply: { ...DEFAULT_POLICY.aiReply, enabled: false } } }
+    { cwd: '/tmp', policy: strictPolicy }
   );
   assert.equal(out.continue, true);
   assert.notEqual(out.decision, 'approve');

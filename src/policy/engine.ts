@@ -154,6 +154,33 @@ export class PolicyEngine {
         normalized: ''
       };
     }
+
+    // deny.write wins over everything else — e.g. `.env`, `*.pem`, `.ssh/**`.
+    const denied = matchPath(target, this.policy.deny.write);
+    if (denied.matched) {
+      return {
+        type: 'deny',
+        reason: `matched deny.write rule "${denied.rule}"`,
+        source: 'policy',
+        rule: denied.rule,
+        detectedKind: prompt.kind,
+        normalized: target
+      };
+    }
+
+    // require_manual.write: allow in principle, but always prompt the user.
+    const manualRule = matchPath(target, this.policy.requireManual.write);
+    if (manualRule.matched) {
+      return {
+        type: 'manual',
+        reason: `matched require_manual.write rule "${manualRule.rule}"`,
+        source: 'policy',
+        rule: manualRule.rule,
+        detectedKind: prompt.kind,
+        normalized: target
+      };
+    }
+
     const allowed = matchPath(target, this.policy.allow.write);
     if (allowed.matched) {
       return {

@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.1.7 — 2026-04-21
+
+Deny-first default policy + new `deny.write` / `require_manual.write`.
+
+The old "narrow allowlist + everything else → manual" default made
+real Claude Code sessions unusable: every `Edit(package.json)`,
+every `Bash(echo foo)`, every unknown little utility popped a
+"🙋 ASK" at the user. Switch the default to **deny-first**:
+
+  - `allow.commands: ["*"]`
+  - `allow.write: ["**"]`
+  - `deny.commands`: rm -rf / sudo / curl|bash / npm publish / chmod
+    777 / mkfs / dd / shutdown / fork-bomb
+  - `deny.write`: .env / .env.* / *.pem / *.key / id_rsa / id_ed25519 /
+    .ssh/** / /etc/** / /usr/** / /System/** / ~/.aws/** / ~/.kube/**
+  - `require_manual.commands`: git push / git tag / git reset --hard /
+    git rebase / git cherry-pick / docker compose up-down /
+    npm|pnpm|yarn install-uninstall-remove / brew install-uninstall /
+    apt install-remove
+  - `require_manual.write`: lockfiles (package-lock.json, pnpm-lock.yaml,
+    yarn.lock) — usually regenerated via install, flagging direct edits
+
+New schema additions:
+  - `deny.read`, `deny.write`: glob patterns, highest precedence for
+    file operations.
+  - `require_manual.write`: globs that get escalated even though
+    `allow.write` matches (perfect for lockfiles and generated code
+    that the user wants to review).
+  - Policy engine now checks `deny.write` → `require_manual.write` →
+    `allow.write` in that order.
+
+Breaking change — please note:
+  - This only affects **new** installs (`yessir init` is still
+    idempotent, it won't overwrite your existing `.yessir/yessir.yml`).
+  - If you want the new defaults, run `yessir init --force` after
+    backing up your policy.
+  - The pre-0.1.7 `deny:` / `require_manual:` sections (only
+    `commands` key) continue to load fine — the new keys are optional.
+
+3 new engine tests covering deny.write + require_manual.write + the
+deny-first approval path. 107/107 green.
+
 ## 0.1.6 — 2026-04-21
 
 Smoother defaults, no more double log lines, no more wrapper-vs-hook
