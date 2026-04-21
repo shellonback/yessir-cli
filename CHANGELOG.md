@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.1.10 — 2026-04-21
+
+`mode: ai` now actually means "AI on every call".
+
+Bug report: after 0.1.9 the user set `--mode=ai` (and `mode: ai` in
+the policy), but the AI reviewer never ran. Reason: the default
+deny-first policy has `allow: ["*"]`, so every non-denied call hit a
+deterministic `approve` and the reviewer branch (`ask_ai`) never
+fired.
+
+Fix: in `mode: ai`, any decision that is NOT a hard `deny` or a
+`require_manual` is routed through the reviewer — including the
+otherwise deterministic `approve`. Deny and require_manual stay
+absolute guardrails (the AI can't override them). `mode: hybrid`
+keeps the old "AI only on unknown" behavior.
+
+New in the decision table:
+
+  | Mode    | deny      | manual    | approve             | ask_ai   |
+  | ------- | --------- | --------- | ------------------- | -------- |
+  | quick   | block     | ask user  | auto-approve        | ask user |
+  | hybrid  | block     | ask user  | auto-approve        | reviewer |
+  | ai      | block     | ask user  | **reviewer**        | reviewer |
+
+3 new tests pinning:
+  - mode:ai deny stays absolute (reviewer is NOT called)
+  - mode:ai approve is routed through the reviewer
+  - mode:hybrid approve is NOT routed through the reviewer
+
+131/131 green.
+
 ## 0.1.9 — 2026-04-21
 
 **Session-scoped hook + real AI reviewer.**

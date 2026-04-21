@@ -177,18 +177,31 @@ export async function processHookInput(
   };
   const decision = engine.evaluate(prompt, ctx);
 
-  // Deterministic branch — no AI call needed.
-  if (decision.type !== 'ask_ai') {
+  // Deny and require_manual are absolute. Never override them with the AI.
+  if (decision.type === 'deny' || decision.type === 'manual') {
     return decisionToHookOutput(decision, opts.policy);
   }
 
-  // ask_ai branch: only invoke the reviewer when the policy actually asked
-  // for it (mode != quick and ai_reply.enabled). Otherwise fall back to manual.
-  if (opts.policy.mode === 'quick' || !opts.policy.aiReply.enabled) {
-    return decisionToHookOutput(
-      { ...decision, type: 'manual', reason: decision.reason },
-      opts.policy
-    );
+  // `mode: ai` means "ask the AI on every call that isn't flat-out denied".
+  // That is why the user set it: they want an AI layer on top, not a shortcut
+  // past it. Even a deterministic `approve` gets routed through the reviewer
+  // so the model has the final say (and still fits within the deterministic
+  // deny/manual guardrails above).
+  const aiOnEveryCall = opts.policy.mode === 'ai' && opts.policy.aiReply.enabled;
+  const aiOnAskAi =
+    decision.type === 'ask_ai' &&
+    opts.policy.mode !== 'quick' &&
+    opts.policy.aiReply.enabled;
+  if (!aiOnEveryCall && !aiOnAskAi) {
+    // Deterministic branch — policy decides, no AI call.
+    // ask_ai without AI enabled → fall back to manual.
+    if (decision.type === 'ask_ai') {
+      return decisionToHookOutput(
+        { ...decision, type: 'manual', reason: decision.reason },
+        opts.policy
+      );
+    }
+    return decisionToHookOutput(decision, opts.policy);
   }
 
   const reviewer = opts.reviewer ?? getDefaultReviewer();

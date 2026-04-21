@@ -141,6 +141,64 @@ test('processHookInput honors YESSIR_BYPASS (anti-recursion)', async () => {
   }
 });
 
+test('processHookInput in mode:ai routes approve decisions through the reviewer', async () => {
+  // With allow=* the deterministic path is approve; in mode:ai we still want
+  // the AI to have final say (the whole reason to turn mode:ai on).
+  const aiPolicy = { ...DEFAULT_POLICY, mode: 'ai' as const };
+  let called = false;
+  const stubReviewer = {
+    name: 'stub',
+    async review() {
+      called = true;
+      return { decision: 'deny' as const, reason: 'model said no', model: 'stub' };
+    }
+  };
+  const out = await processHookInput(
+    { tool_name: 'Bash', tool_input: { command: 'echo hello' } },
+    { cwd: '/tmp', policy: aiPolicy, reviewer: stubReviewer, scope: 'all' }
+  );
+  assert.equal(called, true, 'reviewer must be invoked');
+  // Reviewer's "deny" maps to block on the output (still within guardrails).
+  assert.equal(out.decision, 'block');
+});
+
+test('processHookInput in mode:ai preserves hard deny without asking the AI', async () => {
+  const aiPolicy = { ...DEFAULT_POLICY, mode: 'ai' as const };
+  let called = false;
+  const stubReviewer = {
+    name: 'stub',
+    async review() {
+      called = true;
+      return { decision: 'approve' as const, reason: 'override', model: 'stub' };
+    }
+  };
+  const out = await processHookInput(
+    { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
+    { cwd: '/tmp', policy: aiPolicy, reviewer: stubReviewer, scope: 'all' }
+  );
+  // Even though the reviewer would have approved, deny is absolute.
+  assert.equal(called, false, 'reviewer must NOT be called on hard deny');
+  assert.equal(out.decision, 'block');
+});
+
+test('processHookInput in mode:hybrid only invokes reviewer on ask_ai', async () => {
+  let called = 0;
+  const stubReviewer = {
+    name: 'stub',
+    async review() {
+      called += 1;
+      return { decision: 'approve' as const, reason: 'ok', model: 'stub' };
+    }
+  };
+  const hybrid = { ...DEFAULT_POLICY, mode: 'hybrid' as const };
+  // `echo` matches allow=*, deterministic approve, reviewer NOT called.
+  await processHookInput(
+    { tool_name: 'Bash', tool_input: { command: 'echo hi' } },
+    { cwd: '/tmp', policy: hybrid, reviewer: stubReviewer, scope: 'all' }
+  );
+  assert.equal(called, 0);
+});
+
 test('processHookInput uses the AI reviewer when policy routes to ask_ai', async () => {
   const strictPolicy = {
     ...DEFAULT_POLICY,
