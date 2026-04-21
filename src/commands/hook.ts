@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { processHookInput } from '../hook/pretooluse';
 import { findPolicyFile, loadPolicy, DEFAULT_POLICY } from '../policy/loader';
@@ -63,13 +62,6 @@ export function runHookOnce(opts: HookRunOptions): HookRunResult {
     reason: output.reason
   });
 
-  // Also emit a line for quick human inspection of the .log file.
-  maybeAppendActivity({
-    cwd,
-    toolName: String(parsed.tool_name ?? ''),
-    decisionOutput: output
-  });
-
   return {
     output: JSON.stringify(output),
     // exit 0 keeps Claude Code in control. Manager uses exit codes only when
@@ -85,17 +77,3 @@ function writePassthrough(reason: string): HookRunResult {
   };
 }
 
-function maybeAppendActivity(params: {
-  cwd: string;
-  toolName: string;
-  decisionOutput: { decision?: string; reason?: string };
-}): void {
-  try {
-    const logDir = path.join(params.cwd, '.yessir');
-    if (!fs.existsSync(logDir)) return;
-    const line = `${new Date().toISOString()} ${params.toolName} -> ${params.decisionOutput.decision ?? 'passthrough'} (${params.decisionOutput.reason ?? ''})\n`;
-    fs.appendFileSync(path.join(logDir, 'yessir.log'), line);
-  } catch {
-    // Best-effort logging. Never fail the hook because of IO.
-  }
-}

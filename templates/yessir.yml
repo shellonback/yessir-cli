@@ -40,13 +40,55 @@ allow:
     - "**/*"
 
   write:
+    # project code and asset dirs
     - src/**
     - app/**
     - lib/**
     - tests/**
     - test/**
+    - __tests__/**
     - docs/**
-    - README.md
+    - scripts/**
+    - bin/**
+    - public/**
+    - assets/**
+    - content/**
+    - types/**
+    - .github/**
+    # top-level docs and config files (adjust as needed)
+    - "*.md"
+    - "*.mdx"
+    - "*.txt"
+    - package.json
+    - package-lock.json
+    - yarn.lock
+    - pnpm-lock.yaml
+    - tsconfig*.json
+    - jest.config.*
+    - vitest.config.*
+    - vite.config.*
+    - next.config.*
+    - nuxt.config.*
+    - astro.config.*
+    - svelte.config.*
+    - rollup.config.*
+    - webpack.config.*
+    - babel.config.*
+    - .babelrc*
+    - .eslintrc*
+    - .prettierrc*
+    - .editorconfig
+    - .gitignore
+    - .npmignore
+    - .gitattributes
+    - .nvmrc
+    - .node-version
+    - Dockerfile
+    - Dockerfile.*
+    - docker-compose*.yml
+    - docker-compose*.yaml
+    - .env.example
+    - .env.sample
 
 deny:
   commands:

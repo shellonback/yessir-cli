@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { getAdapter } from '../detector';
 import { PolicyEngine } from '../policy/engine';
@@ -32,6 +33,25 @@ export interface RunOptions {
   stdin?: NodeJS.ReadStream;
   stdout?: NodeJS.WriteStream;
   onExit?: (code: number | null) => void;
+  /**
+   * Force the PTY detect+inject loop even when a yessir PreToolUse hook is
+   * already wired in `.claude/settings.json`. The default is to disable the
+   * detector in that case: the hook already decides every tool call, and
+   * running two layers of decisions on the same session made Claude Code's
+   * TUI stutter (the wrapper's "manual required" messages bled into the
+   * rendered output).
+   */
+  forceDetector?: boolean;
+}
+
+function hasYessirClaudeHook(cwd: string): boolean {
+  const p = path.join(cwd, '.claude', 'settings.json');
+  try {
+    const raw = fs.readFileSync(p, 'utf8');
+    return /yessir(\s+|-cli\s+)?hook\b/.test(raw);
+  } catch {
+    return false;
+  }
 }
 
 export async function runWrap(opts: RunOptions): Promise<number> {
@@ -122,8 +142,23 @@ export async function runWrap(opts: RunOptions): Promise<number> {
     });
   }
 
+  // Collision guard: if the PreToolUse hook is already wired for Claude Code,
+  // running the PTY detector+writer loop on top of it creates double decisions
+  // and bleeds wrapper-level messages into the Claude TUI. Skip the detector
+  // unless the user explicitly opted in with --force-detector.
+  const hookActive = opts.provider === 'claude' && hasYessirClaudeHook(cwd);
+  if (hookActive && !opts.forceDetector) {
+    stdout.write(
+      '\n[yessir] PreToolUse hook detected in .claude/settings.json — ' +
+        'disabling PTY detector (the hook already handles every tool call). ' +
+        'Pass --force-detector to keep both running.\n'
+    );
+    logger.info('run.detector_disabled', { reason: 'hook-present' });
+  }
+
   let lastHandledAt = 0;
   const poller = setInterval(async () => {
+    if (hookActive && !opts.forceDetector) return;
     if (exited) return;
     const snap = tailer.snapshot();
     if (snap.chars === 0) return;

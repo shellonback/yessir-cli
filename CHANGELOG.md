@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.6 — 2026-04-21
+
+Smoother defaults, no more double log lines, no more wrapper-vs-hook
+collisions on Claude Code.
+
+- **Log de-duplicated.** Each decision used to produce two lines in
+  `.yessir/yessir.log`: one structured JSON and one legacy plain text.
+  `yessir tail` showed every decision twice. The legacy appender is
+  gone — one JSON line per decision, one pretty row in the tail.
+- **Default `allow.write` is less restrictive.** It now covers the
+  paths every realistic project edits: top-level config (`package.json`,
+  `tsconfig*.json`, `.gitignore`, `.editorconfig`, `*.md`, `*.mdx`,
+  `*.txt`, lockfiles, `docker-compose.y*ml`, `Dockerfile*`, `.env.example`),
+  and common dirs (`scripts/**`, `bin/**`, `.github/**`, `public/**`,
+  `assets/**`, `content/**`, `types/**`, `__tests__/**`). The narrow
+  0.1.5 default made Claude Code gasp "ask" on almost every `Edit`.
+- **Wrapper vs hook collision detector.** `yessir claude` now reads
+  `.claude/settings.json` at startup. If it finds a wired yessir
+  PreToolUse hook, the PTY detector+writer loop is disabled (the hook
+  already decides every tool call; running both layers is what made
+  Claude Code's TUI stutter and bleed `[yessir] manual required`
+  messages into the rendered output). Opt back in with `--force-detector`.
+
 ## 0.1.5 — 2026-04-21
 
 Fewer false positives on everyday shell idioms.

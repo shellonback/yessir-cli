@@ -47,6 +47,8 @@ Flags:
   --mode <m>        Override mode: quick | ai | hybrid
   --dry-run         Show decisions without injecting responses
   --no-ai           Disable the AI reviewer
+  --force-detector  Keep the PTY detector active even if a yessir hook
+                    is already wired in .claude/settings.json
   --log-level <l>   debug | info | warn | error
   --policy <path>   Explicit policy file path
   -n, --lines <N>   How many trailing log lines to show (default 50)
@@ -198,6 +200,7 @@ async function runProviderCmd(provider: Provider, args: ParsedArgs): Promise<num
     mode: readMode(args),
     dryRun: Boolean(args.flags['dry-run']),
     noAi: Boolean(args.flags['no-ai']),
+    forceDetector: Boolean(args.flags['force-detector']),
     logLevel: readLogLevel(args)
   });
 }
@@ -216,6 +219,7 @@ async function runCustomCmd(args: ParsedArgs): Promise<number> {
     mode: readMode(args),
     dryRun: Boolean(args.flags['dry-run']),
     noAi: Boolean(args.flags['no-ai']),
+    forceDetector: Boolean(args.flags['force-detector']),
     logLevel: readLogLevel(args)
   });
 }
@@ -290,6 +294,7 @@ function isKnownBooleanFlag(name: string): boolean {
     'hook',
     'dry-run',
     'no-ai',
+    'force-detector',
     'help',
     'version',
     'h',
