@@ -75,47 +75,60 @@ export function decisionToHookOutput(
   decision: ReturnType<PolicyEngine['evaluate']>,
   policy: Policy
 ): HookDecisionOutput {
+  void policy;
+  // Keep the permissionDecisionReason short — some Claude Code versions
+  // truncate or ignore the hookSpecificOutput entirely if this string is
+  // too long. One line, no newlines.
+  const shortReason = shortenReason(decision.reason);
   switch (decision.type) {
     case 'approve':
+      // IMPORTANT: emit ONLY the new-schema field. Older versions of Claude
+      // Code still read top-level `decision: "approve"`, but current versions
+      // prefer hookSpecificOutput.permissionDecision, and emitting both
+      // occasionally caused the agent to still show its native permission
+      // dialog. Keeping the response minimal is the safe bet.
       return {
         continue: true,
-        decision: 'approve',
-        reason: decision.reason,
+        suppressOutput: true,
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'allow',
-          permissionDecisionReason: decision.reason
+          permissionDecisionReason: shortReason
         }
       };
     case 'deny':
       return {
         continue: false,
-        stopReason: decision.reason,
-        decision: 'block',
-        reason: decision.reason,
+        stopReason: shortReason,
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'deny',
-          permissionDecisionReason: decision.reason
+          permissionDecisionReason: shortReason
         }
       };
     case 'ask_ai':
     case 'manual':
     default: {
-      // Do not auto-approve; let Claude Code prompt the human.
-      const reason = decision.reason || 'escalated to user';
-      void policy; // policy unused here but kept for future refinements.
       return {
         continue: true,
-        reason,
+        reason: shortReason,
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'ask',
-          permissionDecisionReason: reason
+          permissionDecisionReason: shortReason
         }
       };
     }
   }
+}
+
+function shortenReason(reason: string | undefined): string {
+  if (!reason) return 'yessir: no reason provided';
+  // Collapse all whitespace (newlines, tabs, CR) to a single space and cap
+  // the length to something Claude Code will comfortably surface.
+  const oneLine = reason.replace(/\s+/g, ' ').trim();
+  if (oneLine.length <= 240) return oneLine;
+  return oneLine.slice(0, 237) + '...';
 }
 
 export interface HookProcessOptions {

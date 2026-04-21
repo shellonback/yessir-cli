@@ -1,10 +1,18 @@
 import { spawn } from 'child_process';
+import * as crypto from 'crypto';
 import type { AiReviewer, ReviewerInput, ReviewerOutput } from '../reviewer';
 
 export interface ClaudeCliReviewerOptions {
   binary?: string;
   timeoutMs?: number;
   extraArgs?: readonly string[];
+  /**
+   * Model alias or id passed to `claude --model`. Defaults to
+   * `claude-haiku-4-5` — small, fast (sub-second typical), cheap, and more
+   * than enough for policy reviews. Override via `YESSIR_REVIEWER_MODEL` or
+   * set to empty string to use whatever the user has configured as default.
+   */
+  model?: string;
 }
 
 /**
@@ -20,13 +28,19 @@ export class ClaudeCliReviewer implements AiReviewer {
   private readonly binary: string;
   private readonly timeoutMs: number;
   private readonly extraArgs: readonly string[];
+  private readonly model: string;
 
   constructor(options: ClaudeCliReviewerOptions = {}) {
     this.binary = options.binary || process.env.YESSIR_REVIEWER_BINARY || 'claude';
     const envTimeout = Number(process.env.YESSIR_REVIEWER_TIMEOUT_MS);
+    // Aggressive timeout: Claude Code's native permission dialog will pop up
+    // pretty fast if we don't reply, so we'd rather return `ask` on timeout
+    // than hang the agent's TUI.
     this.timeoutMs =
-      options.timeoutMs ?? (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 30_000);
+      options.timeoutMs ?? (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 8_000);
     this.extraArgs = options.extraArgs ?? [];
+    this.model =
+      options.model ?? process.env.YESSIR_REVIEWER_MODEL ?? 'claude-haiku-4-5';
   }
 
   async review(input: ReviewerInput): Promise<ReviewerOutput> {
@@ -45,8 +59,21 @@ export class ClaudeCliReviewer implements AiReviewer {
 
   private runOnce(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const args = ['-p', '--output-format=json', ...this.extraArgs];
-      const env: NodeJS.ProcessEnv = { ...process.env, YESSIR_BYPASS: '1', CI: '1' };
+      // Give the reviewer its own session id so it doesn't contend with the
+      // user's interactive Claude Code session (shared lock / cache could
+      // stall the subprocess indefinitely).
+      const sessionId = `yessir-rev-${crypto.randomBytes(6).toString('hex')}`;
+      const args: string[] = ['-p', '--output-format=json', '--session-id', sessionId];
+      if (this.model) args.push('--model', this.model);
+      args.push(...this.extraArgs);
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        YESSIR_BYPASS: '1',
+        CI: '1',
+        // Strip out any CLAUDE_* env that might pin the child to the parent
+        // session's state.
+        CLAUDE_CODE_SSE_PORT: ''
+      };
       const child = spawn(this.binary, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         env

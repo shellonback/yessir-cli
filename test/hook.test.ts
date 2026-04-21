@@ -14,6 +14,10 @@ const ALL: { cwd: string; policy: typeof DEFAULT_POLICY; scope: 'all' } = {
   policy: DEFAULT_POLICY,
   scope: 'all'
 };
+function permissionDecision(out: Awaited<ReturnType<typeof processHookInput>>): string | undefined {
+  return (out.hookSpecificOutput as Record<string, unknown> | undefined)?.permissionDecision as string | undefined;
+}
+
 
 test('hookInputToPrompt maps Bash tool to command prompt', () => {
   const p = hookInputToPrompt({
@@ -38,7 +42,7 @@ test('processHookInput approves safe command under allow=*', async () => {
     { tool_name: 'Bash', tool_input: { command: 'npm test' } },
     ALL
   );
-  assert.equal(out.decision, 'approve');
+  assert.equal(permissionDecision(out), 'allow');
   const hookOut = (out.hookSpecificOutput ?? {}) as Record<string, unknown>;
   assert.equal(hookOut.permissionDecision, 'allow');
 });
@@ -48,7 +52,7 @@ test('processHookInput blocks denylisted command', async () => {
     { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
     ALL
   );
-  assert.equal(out.decision, 'block');
+  assert.equal(permissionDecision(out), 'deny');
   const hookOut = (out.hookSpecificOutput ?? {}) as Record<string, unknown>;
   assert.equal(hookOut.permissionDecision, 'deny');
 });
@@ -65,13 +69,13 @@ test('processHookInput passes unknown through when allow list is empty + noAi', 
     { cwd: '/tmp', policy: strictPolicy, scope: 'all' }
   );
   assert.equal(out.continue, true);
-  assert.notEqual(out.decision, 'approve');
+  assert.notEqual(permissionDecision(out), 'allow');
 });
 
 test('processHookInput handles missing tool_name', async () => {
   const out = await processHookInput({} as never, ALL);
   assert.equal(out.continue, true);
-  assert.notEqual(out.decision, 'approve');
+  assert.notEqual(permissionDecision(out), 'allow');
 });
 
 test('processHookInput session scope: passthrough when YESSIR_ACTIVE not set', async () => {
@@ -85,7 +89,7 @@ test('processHookInput session scope: passthrough when YESSIR_ACTIVE not set', a
     // Even a deny-listed command does NOT block when the session was not
     // launched under yessir. This is the whole point of session scoping.
     assert.equal(out.continue, true);
-    assert.notEqual(out.decision, 'block');
+    assert.notEqual(permissionDecision(out), 'deny');
     assert.match(String(out.reason), /passthrough/);
   } finally {
     if (prev !== undefined) process.env.YESSIR_ACTIVE = prev;
@@ -100,7 +104,7 @@ test('processHookInput session scope: decides when YESSIR_ACTIVE=1', async () =>
       { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
       { cwd: '/tmp', policy: DEFAULT_POLICY, scope: 'session' }
     );
-    assert.equal(out.decision, 'block');
+    assert.equal(permissionDecision(out), 'deny');
   } finally {
     if (prev === undefined) delete process.env.YESSIR_ACTIVE;
     else process.env.YESSIR_ACTIVE = prev;
@@ -117,7 +121,7 @@ test('processHookInput YESSIR_SCOPE=all env override makes decisions without YES
       { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
       { cwd: '/tmp', policy: DEFAULT_POLICY }
     );
-    assert.equal(out.decision, 'block');
+    assert.equal(permissionDecision(out), 'deny');
   } finally {
     if (prevScope === undefined) delete process.env.YESSIR_SCOPE;
     else process.env.YESSIR_SCOPE = prevScope;
@@ -159,7 +163,7 @@ test('processHookInput in mode:ai routes approve decisions through the reviewer'
   );
   assert.equal(called, true, 'reviewer must be invoked');
   // Reviewer's "deny" maps to block on the output (still within guardrails).
-  assert.equal(out.decision, 'block');
+  assert.equal(permissionDecision(out), 'deny');
 });
 
 test('processHookInput in mode:ai preserves hard deny without asking the AI', async () => {
@@ -178,7 +182,7 @@ test('processHookInput in mode:ai preserves hard deny without asking the AI', as
   );
   // Even though the reviewer would have approved, deny is absolute.
   assert.equal(called, false, 'reviewer must NOT be called on hard deny');
-  assert.equal(out.decision, 'block');
+  assert.equal(permissionDecision(out), 'deny');
 });
 
 test('processHookInput in mode:hybrid only invokes reviewer on ask_ai', async () => {
@@ -222,8 +226,12 @@ test('processHookInput uses the AI reviewer when policy routes to ask_ai', async
     { cwd: '/tmp', policy: strictPolicy, reviewer: stubReviewer, scope: 'all' }
   );
   assert.deepEqual(called, ['some-weird-tool']);
-  assert.equal(out.decision, 'approve');
-  assert.match(String(out.reason), /AI reviewer \(stub\)/);
+  assert.equal(permissionDecision(out), 'allow');
+  const reason = String(
+    (out.hookSpecificOutput as { permissionDecisionReason?: string } | undefined)
+      ?.permissionDecisionReason ?? out.reason ?? ''
+  );
+  assert.match(reason, /AI reviewer \(stub\)/);
 });
 
 test('runHookOnce emits JSON on stdout and never throws on bad JSON', async () => {
@@ -251,7 +259,7 @@ test('runHookOnce loads policy from nearest .yessir folder', async () => {
   try {
     const res = await runHookOnce({ cwd: tmp, input });
     const parsed = JSON.parse(res.output);
-    assert.equal(parsed.decision, 'approve');
+    assert.equal(parsed.hookSpecificOutput?.permissionDecision, 'allow');
   } finally {
     if (prev === undefined) delete process.env.YESSIR_SCOPE;
     else process.env.YESSIR_SCOPE = prev;
@@ -266,7 +274,7 @@ test('runHookOnce escalates on invalid policy file', async () => {
   const res = await runHookOnce({ cwd: tmp, input });
   const parsed = JSON.parse(res.output);
   assert.equal(parsed.continue, true);
-  assert.notEqual(parsed.decision, 'approve');
+  assert.notEqual(parsed.hookSpecificOutput?.permissionDecision, 'allow');
 });
 
 test('runHookOnce handles empty stdin', async () => {

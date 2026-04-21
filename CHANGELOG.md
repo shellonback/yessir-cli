@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.11 — 2026-04-21
+
+Three connected fixes so `mode: ai` actually feels automatic instead
+of stalling the agent.
+
+- **Reviewer defaults to Claude Haiku 4.5.** Previously used whatever
+  `claude -p` picks (often Sonnet/Opus). Haiku is 3-4× faster for a
+  policy review and just as good at this task. Override with
+  `YESSIR_REVIEWER_MODEL=claude-sonnet-4-6` (or empty string for "let
+  Claude CLI decide").
+- **Timeout cut to 8s** (was 15s). If the reviewer can't answer in 8
+  seconds it's better to fall back to a native permission prompt than
+  to freeze the TUI for longer. Override via
+  `YESSIR_REVIEWER_TIMEOUT_MS`.
+- **Reviewer runs on its own session id.** Previously the spawned
+  `claude -p` could contend with the user's interactive Claude Code
+  session (shared session state / cache / OAuth tokens) and stall.
+  The subprocess now spawns with a random `--session-id yessir-rev-*`
+  and `CLAUDE_CODE_SSE_PORT` stripped from the environment.
+- **Cleaner hook output.** Emit only the new-schema fields:
+  `continue`, `suppressOutput`, and `hookSpecificOutput.permissionDecision(Reason)`.
+  Dropping the legacy top-level `decision: "approve"|"block"` avoids
+  the rare case where Claude Code would still pop its native permission
+  dialog despite yessir approving. Reasons are also normalized to
+  single-line, ≤240 chars.
+
+131/131 green.
+
 ## 0.1.10 — 2026-04-21
 
 `mode: ai` now actually means "AI on every call".
