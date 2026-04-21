@@ -1,0 +1,59 @@
+{
+  "name": "yessir-cli",
+  "version": "0.1.0",
+  "description": "Yessir — the safety layer for autonomous coding agents. Auto-approves safe actions, blocks dangerous ones, answers routine prompts with live terminal context.",
+  "keywords": [
+    "yessir",
+    "claude-code",
+    "codex",
+    "gemini",
+    "aider",
+    "autoapprove",
+    "agent",
+    "policy",
+    "safety",
+    "shellonback"
+  ],
+  "license": "MIT",
+  "author": "ShellOnBack",
+  "homepage": "https://github.com/shellonback/yessir-cli",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shellonback/yessir-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shellonback/yessir-cli/issues"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "type": "commonjs",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "bin": {
+    "yessir": "bin/yessir.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc -p tsconfig.json && node -e \"require('fs').cpSync('templates','dist/templates',{recursive:true})\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test --test-reporter=spec \"dist/test/**/*.test.js\"",
+    "test:fast": "node --test --test-reporter=spec \"dist/test/**/*.test.js\"",
+    "prepublishOnly": "npm run build && npm run test:fast"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
+  }
+}

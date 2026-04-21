@@ -1,0 +1,12 @@
+src/
+test/
+tsconfig.json
+.github/
+.gitignore
+.editorconfig
+coverage/
+*.tgz
+*.log
+node_modules/
+.vscode/
+.idea/
