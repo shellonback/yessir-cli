@@ -19,6 +19,7 @@ export type { AiReviewer, ReviewerInput, ReviewerOutput } from './ai/reviewer';
 export { FileLogger, NullLogger } from './util/logger';
 export { processHookInput, hookInputToPrompt, decisionToHookOutput } from './hook/pretooluse';
 export { runInit, installClaudeHook } from './commands/init';
+export { turnOff, turnOn } from './commands/toggle';
 export { runHookOnce } from './commands/hook';
 export { runExplain } from './commands/explain';
 export { runDoctor } from './commands/doctor';

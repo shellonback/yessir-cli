@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.8 — 2026-04-21
+
+New `yessir off` / `yessir on` toggle. Lets the user stop yessir from
+intercepting tool calls without having to remember which JSON block to
+edit or to uninstall anything.
+
+- `yessir off` — walks `.claude/settings.json`, removes every hook
+  whose command is `yessir hook` (or `yessir-cli hook`, or an absolute
+  path to the binary). Unrelated handlers and entries are preserved
+  verbatim. After the next tool call Claude Code invokes its native
+  permission flow again.
+- `yessir on` — re-installs the PreToolUse hook (same effect as
+  `yessir init --hook`). Existing non-hook settings (permissions,
+  env vars, etc.) are merged, not overwritten.
+- `--global` flag: operates on `~/.claude/settings.json` instead of
+  the project-local file.
+- Aliases: `yessir stop` / `yessir start`, `yessir disable` /
+  `yessir enable`.
+- Both commands are idempotent and safe: malformed settings.json
+  triggers a refusal with a clear message, not a silent rewrite.
+- 7 new tests covering entry removal, handler preservation, empty-
+  entry dropping, idempotence, JSON error refusal, and round-trip
+  `off → on` preserving unrelated keys.
+
 ## 0.1.7 — 2026-04-21
 
 Deny-first default policy + new `deny.write` / `require_manual.write`.

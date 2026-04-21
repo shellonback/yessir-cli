@@ -1,11 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { runInit } from './commands/init';
+import { installClaudeHook, runInit } from './commands/init';
 import { runHookOnce } from './commands/hook';
 import { runExplain } from './commands/explain';
 import { runDoctor } from './commands/doctor';
 import { runWrap } from './commands/run';
 import { runTail } from './commands/tail';
+import { turnOff, turnOn } from './commands/toggle';
 import type { Mode, Provider } from './types';
 
 function readPackageVersion(): string {
@@ -40,6 +41,8 @@ Usage:
   yessir doctor
   yessir explain <command>
   yessir tail [-n <lines>] [--no-follow] [--raw] [--no-color]
+  yessir off [--global]          stop intercepting tool calls (reversible)
+  yessir on  [--global]          re-enable the PreToolUse hook
   yessir --version
   yessir --help
 
@@ -95,6 +98,14 @@ export async function main(argv: readonly string[]): Promise<number> {
       case 'watch':
       case 'logs':
         return await runTailCmd(parsed);
+      case 'off':
+      case 'stop':
+      case 'disable':
+        return await runOffCmd(parsed);
+      case 'on':
+      case 'start':
+      case 'enable':
+        return await runOnCmd(parsed);
       case 'claude':
       case 'codex':
       case 'gemini':
@@ -164,6 +175,26 @@ async function runDoctorCmd(): Promise<number> {
     process.stdout.write(`${icon} ${check.name}: ${check.details}\n`);
   }
   return report.ok ? 0 : 1;
+}
+
+async function runOffCmd(args: ParsedArgs): Promise<number> {
+  const scope: 'project' | 'global' = args.flags['global'] ? 'global' : 'project';
+  const res = turnOff({ cwd: process.cwd(), scope });
+  for (const m of res.messages) process.stdout.write(m + '\n');
+  if (res.status === 'off') {
+    process.stdout.write(
+      'Claude Code will stop invoking yessir on its next tool call. ' +
+        'Existing sessions may need to reload settings to notice.\n'
+    );
+  }
+  return res.status === 'off' || res.status === 'no-change' ? 0 : 1;
+}
+
+async function runOnCmd(args: ParsedArgs): Promise<number> {
+  const scope: 'project' | 'global' = args.flags['global'] ? 'global' : 'project';
+  const res = turnOn({ cwd: process.cwd(), scope }, installClaudeHook);
+  for (const m of res.messages) process.stdout.write(m + '\n');
+  return 0;
 }
 
 async function runTailCmd(args: ParsedArgs): Promise<number> {
@@ -301,7 +332,8 @@ function isKnownBooleanFlag(name: string): boolean {
     'v',
     'no-follow',
     'raw',
-    'no-color'
+    'no-color',
+    'global'
   ].includes(name);
 }
 
