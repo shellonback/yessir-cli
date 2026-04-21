@@ -36,7 +36,8 @@
   },
   "files": [
     "bin",
-    "dist",
+    "dist/src",
+    "dist/templates",
     "templates",
     "README.md",
     "LICENSE",
