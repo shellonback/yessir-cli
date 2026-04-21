@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Release
 
 on:
   push:
@@ -6,21 +6,39 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      tag:
+        description: 'Tag to release (leave empty to use current ref)'
+        required: false
+        default: ''
       dry_run:
-        description: 'Dry run (do not publish)'
+        description: 'Dry run (no npm publish, no GitHub release)'
+        required: false
+        default: 'false'
+      skip_npm:
+        description: 'Skip npm publish (useful for backfilling GitHub Releases on already-published versions)'
         required: false
         default: 'false'
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write   # required for npm provenance
+      contents: write       # required to create a GitHub Release
+      id-token: write       # required for npm provenance
     steps:
+      - name: Resolve target ref
+        id: ref
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "target=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ steps.ref.outputs.target }}
 
       - uses: actions/setup-node@v4
         with:
@@ -38,24 +56,59 @@ jobs:
         run: npm test
 
       - name: Sanity-check tag matches package version
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${{ steps.ref.outputs.target }}"
+          TAG_VERSION="${TAG#v}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           echo "tag=$TAG_VERSION pkg=$PKG_VERSION"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            echo "::error::tag $TAG does not match package.json version $PKG_VERSION"
             exit 1
           fi
 
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          TAG="${{ steps.ref.outputs.target }}"
+          VERSION="${TAG#v}"
+          # Dump the section between "## <version>" and the next "## " header.
+          awk -v ver="$VERSION" '
+            /^## / {
+              if (p) { exit }
+              if (index($0, ver)) { p = 1; next }
+            }
+            p { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG entry for $VERSION; falling back to generated notes." > release-notes.md
+          fi
+          echo "---- release notes ----"
+          cat release-notes.md
+          echo "-----------------------"
+
       - name: Dry-run publish
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' }}
+        if: ${{ inputs.dry_run == 'true' }}
         run: npm publish --access public --provenance --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish to npm
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true') }}
+        if: ${{ inputs.dry_run != 'true' && inputs.skip_npm != 'true' }}
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create / update GitHub Release
+        if: ${{ inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ref.outputs.target }}"
+          TITLE="yessir-cli ${TAG}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — updating notes."
+            gh release edit "$TAG" --title "$TITLE" --notes-file release-notes.md
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" --title "$TITLE" --notes-file release-notes.md
+          fi
