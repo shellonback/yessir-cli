@@ -33,11 +33,12 @@ export class ClaudeCliReviewer implements AiReviewer {
   constructor(options: ClaudeCliReviewerOptions = {}) {
     this.binary = options.binary || process.env.YESSIR_REVIEWER_BINARY || 'claude';
     const envTimeout = Number(process.env.YESSIR_REVIEWER_TIMEOUT_MS);
-    // Aggressive timeout: Claude Code's native permission dialog will pop up
-    // pretty fast if we don't reply, so we'd rather return `ask` on timeout
-    // than hang the agent's TUI.
+    // Generous default: `claude -p` cold-start (auth + model warm-up) can
+    // take 10-20s on some setups. 30s gives the reviewer room to answer on
+    // a real tool call without falling back to ask. Override with
+    // YESSIR_REVIEWER_TIMEOUT_MS.
     this.timeoutMs =
-      options.timeoutMs ?? (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 8_000);
+      options.timeoutMs ?? (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 30_000);
     this.extraArgs = options.extraArgs ?? [];
     this.model =
       options.model ?? process.env.YESSIR_REVIEWER_MODEL ?? 'claude-haiku-4-5';

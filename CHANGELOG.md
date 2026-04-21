@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.13 — 2026-04-21
+
+Reviewer default timeout bumped from 8s → 30s. `claude -p` cold-start
+(auth + model warm-up) routinely took ~10-20s on real setups, so the
+aggressive 8s ceiling from 0.1.11 caused every first tool call to
+fall back to "ask" with `timeout after 8000ms`. 30s matches what
+works in practice; override via `YESSIR_REVIEWER_TIMEOUT_MS`.
+
 ## 0.1.12 — 2026-04-21
 
 Hotfix. 0.1.11 set `--session-id yessir-rev-<hex>` for the reviewer
