@@ -1,0 +1,20 @@
+name: ✨ Feature request
+description: Something Yessir should be able to do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The pain, not the solution. "My agent keeps asking to X" is a problem. "Add flag --X" is a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior (optional)
+      description: If you already have a shape in mind, drop a sketch here.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What workaround are you using today?

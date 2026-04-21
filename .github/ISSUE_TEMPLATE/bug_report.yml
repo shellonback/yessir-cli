@@ -1,0 +1,56 @@
+name: 🐛 Bug report
+description: Something isn't working the way the README promised
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report 🫡
+  - type: input
+    id: version
+    attributes:
+      label: Yessir version
+      description: Output of `yessir --version`
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: "20.11.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Claude Code (hook mode)
+        - Claude Code (wrapper mode)
+        - Codex
+        - Gemini
+        - Aider
+        - generic (`yessir -- <cmd>`)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did Yessir do that it shouldn't have, or not do that it should have?
+      placeholder: "Policy allowed `rm -rf *` when I expected it to be blocked because…"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Policy file + command that triggers the issue. Please redact secrets.
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: From `.yessir/yessir.log`
+      render: shell

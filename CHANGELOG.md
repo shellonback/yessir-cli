@@ -2,6 +2,13 @@
 
 ## 0.1.0 — initial release
 
+First public release of Yessir, spun off from the safety layer that ships
+inside **[PromptOps](https://promptops.it)** — the full AI-agent
+orchestration platform by [ShellOnBack](https://shellonback.com). The
+policy engine, the Claude Code `PreToolUse` hook and the PTY writer here
+are the same building blocks PromptOps uses internally, extracted under
+MIT and trimmed to zero runtime dependencies.
+
 - CLI: `init`, `hook`, `claude`, `codex`, `gemini`, `doctor`, `explain`, generic `--` wrapper.
 - Policy engine with `deny` / `require_manual` / destructive-heuristic / `allow` precedence.
 - Zero-dependency YAML parser for the documented subset.
