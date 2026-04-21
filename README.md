@@ -73,6 +73,12 @@ That's it. Now:
 
 Open Claude Code and watch it stop asking. 🤫
 
+> 💡 **Naming heads-up.** The **package** is `yessir-cli` (for `npx` / `npm
+> install`), the **binary** is `yessir` (after global install). So use
+> `npx yessir-cli <cmd>` without a global install, or
+> `npm install -g yessir-cli` once and then `yessir <cmd>` everywhere.
+> `npx yessir …` won't work — that name belongs to an unrelated npm package.
+
 <details>
 <summary>💡 Prefer to wrap the CLI instead of using the hook?</summary>
 
