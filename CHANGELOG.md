@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.2 — 2026-04-21
+
+Patch release.
+
+- `yessir --version` now reads from `package.json` at runtime instead of
+  using a hardcoded string. Previous releases always printed `0.1.0` no
+  matter which version was installed.
+
+## 0.1.1 — 2026-04-21
+
+Patch release.
+
+- Add `yessir-cli` as an alias bin next to `yessir`, so the README's
+  advertised `npx yessir-cli init --hook` actually runs. Previously
+  `npx yessir-cli` couldn't resolve a bin with that exact name and
+  failed with `sh: yessir: command not found`.
+
 ## 0.1.0 — initial release
 
 First public release of Yessir, spun off from the safety layer that ships

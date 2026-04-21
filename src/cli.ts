@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { runInit } from './commands/init';
 import { runHookOnce } from './commands/hook';
 import { runExplain } from './commands/explain';
@@ -5,7 +7,24 @@ import { runDoctor } from './commands/doctor';
 import { runWrap } from './commands/run';
 import type { Mode, Provider } from './types';
 
-const VERSION = '0.1.0';
+function readPackageVersion(): string {
+  const candidates = [
+    path.resolve(__dirname, '..', '..', 'package.json'),
+    path.resolve(__dirname, '..', '..', '..', 'package.json')
+  ];
+  for (const p of candidates) {
+    try {
+      const raw = fs.readFileSync(p, 'utf8');
+      const pkg = JSON.parse(raw) as { version?: string };
+      if (pkg && typeof pkg.version === 'string') return pkg.version;
+    } catch {
+      // try next candidate
+    }
+  }
+  return '0.0.0-unknown';
+}
+
+const VERSION = readPackageVersion();
 
 const USAGE = `Yessir v${VERSION}
 A local safety layer for terminal-based AI coding agents.
