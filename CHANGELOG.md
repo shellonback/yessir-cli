@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12 — 2026-04-21
+
+Hotfix. 0.1.11 set `--session-id yessir-rev-<hex>` for the reviewer
+subprocess; Claude CLI rejected it with "Invalid session ID. Must be
+a valid UUID." and the reviewer returned manual on every call. Now
+uses `crypto.randomUUID()` so the session id is a proper UUID v4.
+
 ## 0.1.11 — 2026-04-21
 
 Three connected fixes so `mode: ai` actually feels automatic instead

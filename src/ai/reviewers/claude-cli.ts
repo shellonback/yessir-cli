@@ -61,8 +61,9 @@ export class ClaudeCliReviewer implements AiReviewer {
     return new Promise((resolve, reject) => {
       // Give the reviewer its own session id so it doesn't contend with the
       // user's interactive Claude Code session (shared lock / cache could
-      // stall the subprocess indefinitely).
-      const sessionId = `yessir-rev-${crypto.randomBytes(6).toString('hex')}`;
+      // stall the subprocess indefinitely). Claude CLI requires a valid
+      // UUID v4 for --session-id, not a free-form string.
+      const sessionId = crypto.randomUUID();
       const args: string[] = ['-p', '--output-format=json', '--session-id', sessionId];
       if (this.model) args.push('--model', this.model);
       args.push(...this.extraArgs);
