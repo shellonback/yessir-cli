@@ -61,7 +61,8 @@ test('processHookInput handles missing tool_name', () => {
 });
 
 test('runHookOnce emits JSON on stdout and never throws on bad JSON', () => {
-  const res = runHookOnce({ cwd: os.tmpdir(), input: '{bad json' });
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paa-badjson-'));
+  const res = runHookOnce({ cwd: tmp, input: '{bad json' });
   const parsed = JSON.parse(res.output);
   assert.equal(parsed.continue, true);
   assert.match(parsed.reason, /invalid JSON/);
@@ -95,7 +96,8 @@ test('runHookOnce escalates on invalid policy file', () => {
 });
 
 test('runHookOnce handles empty stdin', () => {
-  const res = runHookOnce({ cwd: os.tmpdir(), input: '' });
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paa-empty-'));
+  const res = runHookOnce({ cwd: tmp, input: '' });
   const parsed = JSON.parse(res.output);
   assert.equal(parsed.continue, true);
 });

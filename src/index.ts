@@ -22,4 +22,5 @@ export { runInit, installClaudeHook } from './commands/init';
 export { runHookOnce } from './commands/hook';
 export { runExplain } from './commands/explain';
 export { runDoctor } from './commands/doctor';
+export { runTail, prettyLine, findLogFile } from './commands/tail';
 export { main, parseArgs } from './cli';

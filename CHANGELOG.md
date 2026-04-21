@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.3 — 2026-04-21
+
+- 🪵 **New `yessir tail` command** (aliases: `watch`, `logs`). Streams the
+  decision log at `.yessir/yessir.log` in real time with a compact,
+  emoji + ANSI color format:
+  ```
+  12:00:00 Bash    ✅ APPROVE  matched allow rule "npm test"
+  12:00:02 Bash    ⛔ BLOCK    matched deny rule "rm -rf *"
+  12:00:04 Write   ✅ APPROVE  matched allow.write rule "src/**"
+  12:00:06 Bash    🙋 ASK      unknown command, deferring to AI reviewer
+  ```
+  Flags: `-n <N>` / `--lines` (default 50), `--no-follow`, `--raw`,
+  `--no-color`, `--log-path <file>` (via the programmatic API).
+- Fixed two test-suite tmpdir hygiene issues that let a stray
+  `.yessir/` leak into `os.tmpdir()` and contaminated ancestor-based
+  log lookups.
+
 ## 0.1.2 — 2026-04-21
 
 Patch release.

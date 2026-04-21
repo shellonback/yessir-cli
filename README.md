@@ -217,6 +217,31 @@ yessir claude --dry-run         # see decisions without injecting anything
 
 ---
 
+## 🪵 Live log — see every decision as it happens
+
+Every approval, block, or escalation is written to `.yessir/yessir.log` as
+one structured JSON line. Use the built-in streamer to watch it in real time:
+
+```bash
+yessir tail               # follows the log, emoji + color, Ctrl+C to stop
+yessir tail -n 200        # show the last 200 entries first
+yessir tail --no-follow   # print and exit (good for CI / scripting)
+yessir tail --raw         # raw JSON lines (no formatting)
+```
+
+Example output while Claude Code is working next door:
+
+```text
+12:00:00 Bash    ✅ APPROVE  matched allow rule "npm test"
+12:00:02 Bash    ⛔ BLOCK    matched deny rule "rm -rf *"
+12:00:04 Write   ✅ APPROVE  matched allow.write rule "src/**"
+12:00:06 Bash    🙋 ASK      unknown command, deferring to AI reviewer
+```
+
+Aliases: `yessir watch` and `yessir logs` do the same.
+
+---
+
 ## 🧩 Plugging your own AI reviewer
 
 The default reviewer is a `NoopReviewer` that always escalates (safe default).

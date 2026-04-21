@@ -5,6 +5,7 @@ import { runHookOnce } from './commands/hook';
 import { runExplain } from './commands/explain';
 import { runDoctor } from './commands/doctor';
 import { runWrap } from './commands/run';
+import { runTail } from './commands/tail';
 import type { Mode, Provider } from './types';
 
 function readPackageVersion(): string {
@@ -38,6 +39,7 @@ Usage:
   yessir -- <command> [args...]
   yessir doctor
   yessir explain <command>
+  yessir tail [-n <lines>] [--no-follow] [--raw] [--no-color]
   yessir --version
   yessir --help
 
@@ -47,6 +49,10 @@ Flags:
   --no-ai           Disable the AI reviewer
   --log-level <l>   debug | info | warn | error
   --policy <path>   Explicit policy file path
+  -n, --lines <N>   How many trailing log lines to show (default 50)
+  --no-follow       Print and exit instead of streaming
+  --raw             Print raw JSON log lines (no formatting)
+  --no-color        Disable ANSI colors even on a TTY
 
 Notes:
   'hook' is invoked by Claude Code via PreToolUse. It reads JSON from stdin
@@ -83,6 +89,10 @@ export async function main(argv: readonly string[]): Promise<number> {
         return await runExplainCmd(parsed);
       case 'doctor':
         return await runDoctorCmd();
+      case 'tail':
+      case 'watch':
+      case 'logs':
+        return await runTailCmd(parsed);
       case 'claude':
       case 'codex':
       case 'gemini':
@@ -152,6 +162,33 @@ async function runDoctorCmd(): Promise<number> {
     process.stdout.write(`${icon} ${check.name}: ${check.details}\n`);
   }
   return report.ok ? 0 : 1;
+}
+
+async function runTailCmd(args: ParsedArgs): Promise<number> {
+  const follow = args.flags['no-follow'] !== true;
+  const raw = Boolean(args.flags['raw']);
+  const color = args.flags['no-color'] !== true;
+  const linesRaw = args.flags['lines'] ?? args.flags['n'];
+  const lines =
+    typeof linesRaw === 'string' && /^\d+$/.test(linesRaw)
+      ? Number(linesRaw)
+      : undefined;
+  const controller = new AbortController();
+  const onSigint = () => controller.abort();
+  process.once('SIGINT', onSigint);
+  try {
+    const res = await runTail({
+      cwd: process.cwd(),
+      follow,
+      raw,
+      color,
+      lines,
+      signal: controller.signal
+    });
+    return res.stopped === 'error' ? 1 : 0;
+  } finally {
+    process.off('SIGINT', onSigint);
+  }
 }
 
 async function runProviderCmd(provider: Provider, args: ParsedArgs): Promise<number> {
@@ -248,7 +285,19 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 }
 
 function isKnownBooleanFlag(name: string): boolean {
-  return ['force', 'hook', 'dry-run', 'no-ai', 'help', 'version', 'h', 'v'].includes(name);
+  return [
+    'force',
+    'hook',
+    'dry-run',
+    'no-ai',
+    'help',
+    'version',
+    'h',
+    'v',
+    'no-follow',
+    'raw',
+    'no-color'
+  ].includes(name);
 }
 
 function readAllStdin(): Promise<string> {
