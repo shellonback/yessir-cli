@@ -2,7 +2,12 @@ import * as path from 'path';
 import { getAdapter } from '../detector';
 import { PolicyEngine } from '../policy/engine';
 import { findPolicyFile, loadPolicy, DEFAULT_POLICY } from '../policy/loader';
-import { defaultProviderCommand, PtyUnavailableError, spawnPty } from '../pty/wrapper';
+import {
+  defaultProviderCommand,
+  ProviderBinaryNotFoundError,
+  PtyUnavailableError,
+  spawnPty
+} from '../pty/wrapper';
 import { TerminalTailer } from '../tailer/tailer';
 import { TerminalWriter } from '../writer/writer';
 import { FileLogger } from '../util/logger';
@@ -58,6 +63,14 @@ export async function runWrap(opts: RunOptions): Promise<number> {
     if (err instanceof PtyUnavailableError) {
       process.stderr.write(`[yessir] ${err.message}\n`);
       return 2;
+    }
+    if (err instanceof ProviderBinaryNotFoundError) {
+      process.stderr.write(`[yessir] ${err.message}\n`);
+      logger.error('run.binary_not_found', {
+        binary: err.binary,
+        searched: err.searched.length
+      });
+      return 127;
     }
     throw err;
   }

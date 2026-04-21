@@ -23,4 +23,10 @@ export { runHookOnce } from './commands/hook';
 export { runExplain } from './commands/explain';
 export { runDoctor } from './commands/doctor';
 export { runTail, prettyLine, findLogFile } from './commands/tail';
+export {
+  spawnPty,
+  resolveBinary,
+  PtyUnavailableError,
+  ProviderBinaryNotFoundError
+} from './pty/wrapper';
 export { main, parseArgs } from './cli';

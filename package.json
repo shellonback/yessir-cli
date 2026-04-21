@@ -1,6 +1,6 @@
 {
   "name": "yessir-cli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Yessir — the safety layer for autonomous coding agents. OSS spin-off of PromptOps (https://promptops.it) by ShellOnBack. Auto-approves safe actions, blocks dangerous ones, answers routine prompts with live terminal context.",
   "keywords": [
     "yessir",
@@ -53,7 +53,7 @@
     "prepublishOnly": "npm run build && npm run test:fast"
   },
   "optionalDependencies": {
-    "node-pty": "^1.0.0"
+    "node-pty": "^1.2.0-beta.12"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

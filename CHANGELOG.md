@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.4 — 2026-04-21
+
+PTY wrapper compatibility on Node 25 + clearer error paths.
+
+- Bump optional dependency `node-pty` from `^1.0.0` (fails on Node 25
+  with `posix_spawnp failed.` because the native binding predates the
+  new Node ABI) to `^1.2.0-beta.12`. `yessir claude`, `yessir codex`,
+  `yessir -- <cmd>` now work on Node 22+25 again.
+- Resolve provider binaries to absolute paths before calling
+  `pty.spawn`. `node-pty` does not reliably honor `$PATH` lookup the
+  way `child_process.spawn` does, so `pty.spawn("claude", ...)` failed
+  even when `which claude` found it.
+- Introduce `ProviderBinaryNotFoundError`: if the resolver cannot
+  locate the binary we surface a clear hint ("install the provider CLI
+  and make sure it's reachable — try `which <binary>`") instead of
+  bubbling up the opaque `posix_spawnp failed.` message.
+- 5 new tests covering the PATH resolver.
+
 ## 0.1.3 — 2026-04-21
 
 - 🪵 **New `yessir tail` command** (aliases: `watch`, `logs`). Streams the
