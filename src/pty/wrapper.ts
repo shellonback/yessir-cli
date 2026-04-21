@@ -118,7 +118,11 @@ export function spawnPty(
   const cols = options.cols ?? process.stdout.columns ?? 120;
   const rows = options.rows ?? process.stdout.rows ?? 30;
   const name = options.name ?? process.env.TERM ?? 'xterm-256color';
-  const env = options.env ?? process.env;
+  // Session-scoping: tag the child so the PreToolUse hook knows this provider
+  // was launched under yessir. The hook checks YESSIR_ACTIVE=1 and otherwise
+  // passes through — nude `claude` / `codex` behave as if yessir isn't there.
+  const baseEnv = options.env ?? process.env;
+  const env: NodeJS.ProcessEnv = { ...baseEnv, YESSIR_ACTIVE: '1' };
   // Resolve to an absolute path: node-pty uses posix_spawnp which does not
   // reliably search PATH, so `pty.spawn("claude", ...)` fails with the
   // unhelpful "posix_spawnp failed." even when `which claude` finds it.

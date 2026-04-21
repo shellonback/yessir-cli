@@ -7,6 +7,14 @@ import { hookInputToPrompt, processHookInput } from '../src/hook/pretooluse';
 import { runHookOnce } from '../src/commands/hook';
 import { DEFAULT_POLICY } from '../src/policy/loader';
 
+// In tests we always want to exercise the decision path, so we opt into the
+// "all" scope. Session scoping is verified in its own test below.
+const ALL: { cwd: string; policy: typeof DEFAULT_POLICY; scope: 'all' } = {
+  cwd: '/tmp',
+  policy: DEFAULT_POLICY,
+  scope: 'all'
+};
+
 test('hookInputToPrompt maps Bash tool to command prompt', () => {
   const p = hookInputToPrompt({
     tool_name: 'Bash',
@@ -25,56 +33,150 @@ test('hookInputToPrompt maps Write tool to file_write prompt', () => {
   assert.equal(p.target, 'src/app.ts');
 });
 
-test('processHookInput approves safe command', () => {
-  const out = processHookInput(
+test('processHookInput approves safe command under allow=*', async () => {
+  const out = await processHookInput(
     { tool_name: 'Bash', tool_input: { command: 'npm test' } },
-    { cwd: '/tmp', policy: DEFAULT_POLICY }
+    ALL
   );
   assert.equal(out.decision, 'approve');
   const hookOut = (out.hookSpecificOutput ?? {}) as Record<string, unknown>;
   assert.equal(hookOut.permissionDecision, 'allow');
 });
 
-test('processHookInput blocks denylisted command', () => {
-  const out = processHookInput(
+test('processHookInput blocks denylisted command', async () => {
+  const out = await processHookInput(
     { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
-    { cwd: '/tmp', policy: DEFAULT_POLICY }
+    ALL
   );
   assert.equal(out.decision, 'block');
   const hookOut = (out.hookSpecificOutput ?? {}) as Record<string, unknown>;
   assert.equal(hookOut.permissionDecision, 'deny');
 });
 
-test('processHookInput passes unknown through to user when allow list is empty', () => {
+test('processHookInput passes unknown through when allow list is empty + noAi', async () => {
   const strictPolicy = {
     ...DEFAULT_POLICY,
     mode: 'quick' as const,
     allow: { commands: [], read: [], write: [] },
     aiReply: { ...DEFAULT_POLICY.aiReply, enabled: false }
   };
-  const out = processHookInput(
+  const out = await processHookInput(
     { tool_name: 'Bash', tool_input: { command: 'some-rare-tool --flag' } },
-    { cwd: '/tmp', policy: strictPolicy }
+    { cwd: '/tmp', policy: strictPolicy, scope: 'all' }
   );
   assert.equal(out.continue, true);
   assert.notEqual(out.decision, 'approve');
 });
 
-test('processHookInput handles missing tool_name', () => {
-  const out = processHookInput({} as never, { cwd: '/tmp', policy: DEFAULT_POLICY });
+test('processHookInput handles missing tool_name', async () => {
+  const out = await processHookInput({} as never, ALL);
   assert.equal(out.continue, true);
   assert.notEqual(out.decision, 'approve');
 });
 
-test('runHookOnce emits JSON on stdout and never throws on bad JSON', () => {
+test('processHookInput session scope: passthrough when YESSIR_ACTIVE not set', async () => {
+  const prev = process.env.YESSIR_ACTIVE;
+  delete process.env.YESSIR_ACTIVE;
+  try {
+    const out = await processHookInput(
+      { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
+      { cwd: '/tmp', policy: DEFAULT_POLICY, scope: 'session' }
+    );
+    // Even a deny-listed command does NOT block when the session was not
+    // launched under yessir. This is the whole point of session scoping.
+    assert.equal(out.continue, true);
+    assert.notEqual(out.decision, 'block');
+    assert.match(String(out.reason), /passthrough/);
+  } finally {
+    if (prev !== undefined) process.env.YESSIR_ACTIVE = prev;
+  }
+});
+
+test('processHookInput session scope: decides when YESSIR_ACTIVE=1', async () => {
+  const prev = process.env.YESSIR_ACTIVE;
+  process.env.YESSIR_ACTIVE = '1';
+  try {
+    const out = await processHookInput(
+      { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
+      { cwd: '/tmp', policy: DEFAULT_POLICY, scope: 'session' }
+    );
+    assert.equal(out.decision, 'block');
+  } finally {
+    if (prev === undefined) delete process.env.YESSIR_ACTIVE;
+    else process.env.YESSIR_ACTIVE = prev;
+  }
+});
+
+test('processHookInput YESSIR_SCOPE=all env override makes decisions without YESSIR_ACTIVE', async () => {
+  const prevScope = process.env.YESSIR_SCOPE;
+  const prevActive = process.env.YESSIR_ACTIVE;
+  process.env.YESSIR_SCOPE = 'all';
+  delete process.env.YESSIR_ACTIVE;
+  try {
+    const out = await processHookInput(
+      { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
+      { cwd: '/tmp', policy: DEFAULT_POLICY }
+    );
+    assert.equal(out.decision, 'block');
+  } finally {
+    if (prevScope === undefined) delete process.env.YESSIR_SCOPE;
+    else process.env.YESSIR_SCOPE = prevScope;
+    if (prevActive !== undefined) process.env.YESSIR_ACTIVE = prevActive;
+  }
+});
+
+test('processHookInput honors YESSIR_BYPASS (anti-recursion)', async () => {
+  const prev = process.env.YESSIR_BYPASS;
+  process.env.YESSIR_BYPASS = '1';
+  try {
+    const out = await processHookInput(
+      { tool_name: 'Bash', tool_input: { command: 'rm -rf /' } },
+      ALL
+    );
+    assert.equal(out.continue, true);
+    assert.match(String(out.reason), /YESSIR_BYPASS/);
+  } finally {
+    if (prev === undefined) delete process.env.YESSIR_BYPASS;
+    else process.env.YESSIR_BYPASS = prev;
+  }
+});
+
+test('processHookInput uses the AI reviewer when policy routes to ask_ai', async () => {
+  const strictPolicy = {
+    ...DEFAULT_POLICY,
+    mode: 'ai' as const,
+    allow: { commands: [], read: [], write: [] }
+  };
+  const called: string[] = [];
+  const stubReviewer = {
+    name: 'stub',
+    async review(input: { prompt: { command?: string } }) {
+      called.push(input.prompt.command ?? '');
+      return {
+        decision: 'approve' as const,
+        reason: 'stub said ok',
+        model: 'stub'
+      };
+    }
+  };
+  const out = await processHookInput(
+    { tool_name: 'Bash', tool_input: { command: 'some-weird-tool' } },
+    { cwd: '/tmp', policy: strictPolicy, reviewer: stubReviewer, scope: 'all' }
+  );
+  assert.deepEqual(called, ['some-weird-tool']);
+  assert.equal(out.decision, 'approve');
+  assert.match(String(out.reason), /AI reviewer \(stub\)/);
+});
+
+test('runHookOnce emits JSON on stdout and never throws on bad JSON', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paa-badjson-'));
-  const res = runHookOnce({ cwd: tmp, input: '{bad json' });
+  const res = await runHookOnce({ cwd: tmp, input: '{bad json' });
   const parsed = JSON.parse(res.output);
   assert.equal(parsed.continue, true);
   assert.match(parsed.reason, /invalid JSON/);
 });
 
-test('runHookOnce loads policy from nearest .yessir folder', () => {
+test('runHookOnce loads policy from nearest .yessir folder', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paa-hook-'));
   fs.mkdirSync(path.join(tmp, '.yessir'), { recursive: true });
   fs.writeFileSync(
@@ -85,25 +187,33 @@ test('runHookOnce loads policy from nearest .yessir folder', () => {
     tool_name: 'Bash',
     tool_input: { command: 'git status' }
   });
-  const res = runHookOnce({ cwd: tmp, input });
-  const parsed = JSON.parse(res.output);
-  assert.equal(parsed.decision, 'approve');
+  // Force scope=all via env var so we don't have to tag the test env.
+  const prev = process.env.YESSIR_SCOPE;
+  process.env.YESSIR_SCOPE = 'all';
+  try {
+    const res = await runHookOnce({ cwd: tmp, input });
+    const parsed = JSON.parse(res.output);
+    assert.equal(parsed.decision, 'approve');
+  } finally {
+    if (prev === undefined) delete process.env.YESSIR_SCOPE;
+    else process.env.YESSIR_SCOPE = prev;
+  }
 });
 
-test('runHookOnce escalates on invalid policy file', () => {
+test('runHookOnce escalates on invalid policy file', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paa-bad-'));
   fs.mkdirSync(path.join(tmp, '.yessir'), { recursive: true });
   fs.writeFileSync(path.join(tmp, '.yessir', 'yessir.yml'), 'mode: turbo\n');
   const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git status' } });
-  const res = runHookOnce({ cwd: tmp, input });
+  const res = await runHookOnce({ cwd: tmp, input });
   const parsed = JSON.parse(res.output);
   assert.equal(parsed.continue, true);
   assert.notEqual(parsed.decision, 'approve');
 });
 
-test('runHookOnce handles empty stdin', () => {
+test('runHookOnce handles empty stdin', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'paa-empty-'));
-  const res = runHookOnce({ cwd: tmp, input: '' });
+  const res = await runHookOnce({ cwd: tmp, input: '' });
   const parsed = JSON.parse(res.output);
   assert.equal(parsed.continue, true);
 });

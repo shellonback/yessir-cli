@@ -141,7 +141,7 @@ async function runInitCmd(args: ParsedArgs): Promise<number> {
 
 async function runHookCmd(): Promise<number> {
   const input = await readAllStdin();
-  const res = runHookOnce({ cwd: process.cwd(), input });
+  const res = await runHookOnce({ cwd: process.cwd(), input });
   process.stdout.write(res.output);
   if (!res.output.endsWith('\n')) process.stdout.write('\n');
   return res.exitCode;

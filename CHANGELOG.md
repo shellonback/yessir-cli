@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.1.9 — 2026-04-21
+
+**Session-scoped hook + real AI reviewer.**
+
+- **Session scoping (default).** The PreToolUse hook now intercepts calls
+  only when the provider session was launched under yessir (env var
+  `YESSIR_ACTIVE=1`). Running `claude` (or any other supported CLI)
+  directly bypasses yessir entirely — same behavior as if yessir was
+  not installed. To opt in for every session set `YESSIR_SCOPE=all`.
+  The PTY wrapper (`yessir claude`, `yessir codex`, etc.) sets
+  `YESSIR_ACTIVE=1` on the child process automatically, so running via
+  `yessir <provider>` still does the right thing.
+- **ClaudeCliReviewer.** `--mode=ai` now actually asks an AI. The
+  default reviewer spawns `claude -p --output-format=json` as a
+  one-shot subprocess, sends it the tool call + policy summary, and
+  parses a structured `{decision, reply, reason}` back. No API keys to
+  configure: if `claude` is on your PATH, you have a reviewer.
+- **Hook calls the reviewer on `ask_ai`.** `processHookInput` is now
+  async and, when the engine routes a tool call to `ask_ai` (mode != quick,
+  aiReply enabled), it delegates to the configured reviewer instead of
+  blindly returning "ask". Reviewer timeout is 30s by default (override
+  with env `YESSIR_REVIEWER_TIMEOUT_MS`).
+- **Anti-recursion bypass.** The reviewer subprocess inherits
+  `YESSIR_BYPASS=1`. If it ever triggers the hook (shouldn't, but
+  defensive), the hook returns an immediate passthrough instead of
+  calling the reviewer again and spiraling.
+- Pluggable: `YESSIR_REVIEWER=noop` falls back to the old behavior,
+  `YESSIR_REVIEWER=claude` (default) uses the Claude CLI backend.
+  Additional backends can be plugged via the exported `AiReviewer`
+  interface.
+
+Tests: 128 total, 14 new across scope/bypass/reviewer stubbing and
+`ClaudeCliReviewer` happy/error/timeout paths.
+
 ## 0.1.8 — 2026-04-21
 
 New `yessir off` / `yessir on` toggle. Lets the user stop yessir from

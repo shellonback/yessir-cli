@@ -16,6 +16,8 @@ export { getAdapter } from './detector';
 export { TerminalWriter } from './writer/writer';
 export { NoopReviewer, redactSecrets, summarizePolicy, toEngineDecision } from './ai/reviewer';
 export type { AiReviewer, ReviewerInput, ReviewerOutput } from './ai/reviewer';
+export { ClaudeCliReviewer } from './ai/reviewers/claude-cli';
+export { getDefaultReviewer } from './ai/default-reviewer';
 export { FileLogger, NullLogger } from './util/logger';
 export { processHookInput, hookInputToPrompt, decisionToHookOutput } from './hook/pretooluse';
 export { runInit, installClaudeHook } from './commands/init';

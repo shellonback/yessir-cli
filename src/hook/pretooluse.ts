@@ -1,6 +1,9 @@
 import type { DetectedPrompt, HookDecisionOutput, HookPreToolUseInput } from '../types';
 import { PolicyEngine } from '../policy/engine';
 import type { Policy } from '../types';
+import type { AiReviewer, ReviewerInput } from '../ai/reviewer';
+import { summarizePolicy, toEngineDecision } from '../ai/reviewer';
+import { getDefaultReviewer } from '../ai/default-reviewer';
 
 /**
  * Translate a Claude Code PreToolUse hook payload into a DetectedPrompt.
@@ -118,24 +121,102 @@ export function decisionToHookOutput(
 export interface HookProcessOptions {
   cwd: string;
   policy: Policy;
+  /** Override for tests; in production uses getDefaultReviewer(). */
+  reviewer?: AiReviewer;
+  /**
+   * Scope: 'session' means this invocation only intercepts calls coming from a
+   * yessir-originated session (env.YESSIR_ACTIVE=1). 'all' means intercept
+   * every call. Defaults to 'session' — the provider runs wild unless the user
+   * explicitly wrapped it with `yessir <provider>`. Override with
+   * `YESSIR_SCOPE=all` for the legacy "always on" behavior.
+   */
+  scope?: 'session' | 'all';
 }
 
-export function processHookInput(
+function resolveScope(opts: HookProcessOptions): 'session' | 'all' {
+  if (opts.scope) return opts.scope;
+  const env = (process.env.YESSIR_SCOPE ?? '').toLowerCase();
+  if (env === 'all' || env === 'always') return 'all';
+  return 'session';
+}
+
+export async function processHookInput(
   input: HookPreToolUseInput,
   opts: HookProcessOptions
-): HookDecisionOutput {
+): Promise<HookDecisionOutput> {
   if (!input || typeof input !== 'object') {
     return { continue: true, reason: 'invalid hook payload (escalated to user)' };
   }
   if (!input.tool_name) {
     return { continue: true, reason: 'missing tool_name (escalated to user)' };
   }
+  // Honor the anti-recursion bypass: subprocesses spawned BY the AI reviewer
+  // set YESSIR_BYPASS=1 so their tool calls don't trigger yessir again.
+  if (process.env.YESSIR_BYPASS === '1') {
+    return {
+      continue: true,
+      reason: 'bypass: YESSIR_BYPASS=1 set by reviewer subprocess'
+    };
+  }
+  // Session scoping: only intercept if this session was launched under
+  // yessir (YESSIR_ACTIVE=1). Nude `claude` / `codex` / etc. get a silent
+  // passthrough so they behave exactly like yessir is not installed.
+  const scope = resolveScope(opts);
+  if (scope === 'session' && process.env.YESSIR_ACTIVE !== '1') {
+    return {
+      continue: true,
+      reason: 'passthrough: session not launched under yessir (set YESSIR_SCOPE=all to intercept always)'
+    };
+  }
   const prompt = hookInputToPrompt(input);
   const engine = new PolicyEngine(opts.policy);
-  const decision = engine.evaluate(prompt, {
+  const ctx = {
     cwd: input.cwd ?? opts.cwd,
-    provider: 'claude',
+    provider: 'claude' as const,
     mode: opts.policy.mode
-  });
-  return decisionToHookOutput(decision, opts.policy);
+  };
+  const decision = engine.evaluate(prompt, ctx);
+
+  // Deterministic branch — no AI call needed.
+  if (decision.type !== 'ask_ai') {
+    return decisionToHookOutput(decision, opts.policy);
+  }
+
+  // ask_ai branch: only invoke the reviewer when the policy actually asked
+  // for it (mode != quick and ai_reply.enabled). Otherwise fall back to manual.
+  if (opts.policy.mode === 'quick' || !opts.policy.aiReply.enabled) {
+    return decisionToHookOutput(
+      { ...decision, type: 'manual', reason: decision.reason },
+      opts.policy
+    );
+  }
+
+  const reviewer = opts.reviewer ?? getDefaultReviewer();
+  const reviewerInput: ReviewerInput = {
+    prompt,
+    ctx,
+    tail: '',
+    policySummary: summarizePolicy(opts.policy)
+  };
+  let reviewerOut;
+  try {
+    reviewerOut = await reviewer.review(reviewerInput);
+  } catch (err) {
+    return decisionToHookOutput(
+      {
+        ...decision,
+        type: 'manual',
+        reason: `AI reviewer threw: ${(err as Error)?.message ?? 'unknown error'}`
+      },
+      opts.policy
+    );
+  }
+  const translated = toEngineDecision(reviewerOut);
+  const reason = reviewerOut.reason
+    ? `AI reviewer (${reviewer.name}): ${reviewerOut.reason}`
+    : `AI reviewer (${reviewer.name})`;
+  return decisionToHookOutput(
+    { ...decision, type: translated.type, reason },
+    opts.policy
+  );
 }

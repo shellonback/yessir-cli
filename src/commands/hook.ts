@@ -18,7 +18,7 @@ export interface HookRunResult {
   exitCode: number;
 }
 
-export function runHookOnce(opts: HookRunOptions): HookRunResult {
+export async function runHookOnce(opts: HookRunOptions): Promise<HookRunResult> {
   const cwd = path.resolve(opts.cwd);
   const logger = opts.logger ?? new FileLogger({ file: path.join(cwd, LOG_RELATIVE_PATH) });
 
@@ -55,7 +55,7 @@ export function runHookOnce(opts: HookRunOptions): HookRunResult {
   }
 
   const hookCwd = parsed.cwd ?? cwd;
-  const output = processHookInput(parsed, { cwd: hookCwd, policy });
+  const output = await processHookInput(parsed, { cwd: hookCwd, policy });
   logger.info('hook.decision', {
     tool: parsed.tool_name,
     decision: output.decision ?? 'passthrough',
