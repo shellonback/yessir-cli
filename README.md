@@ -23,9 +23,8 @@ while blocking the ones that could wreck your repo. 🛡️
 > We pulled the part that every developer needs into its own MIT-licensed
 > CLI. No account, no cloud, no UI.
 
-[![CI](https://github.com/shellonback/yessir-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/shellonback/yessir-cli/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/yessir-cli?color=%23cb3837&label=npm)](https://www.npmjs.com/package/yessir-cli)
-[![node](https://img.shields.io/node/v/yessir-cli?color=%2343853d)](https://nodejs.org)
+[![CI](https://github.com/shellonback/yessir-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/shellonback/yessir-cli/actions/workflows/ci.yml)
+[![node](https://img.shields.io/badge/node-%E2%89%A518.17-43853d)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg)](./LICENSE)
 [![tests](https://img.shields.io/badge/tests-86%20passing-brightgreen.svg)](#-tests)
 [![zero deps](https://img.shields.io/badge/runtime%20deps-0-informational)](./package.json)
