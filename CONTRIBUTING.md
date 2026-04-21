@@ -46,6 +46,36 @@ Update the parser in `src/policy/yaml.ts`, the loader in `src/policy/loader.ts`,
 and the template in `templates/yessir.yml`. Bump the default policy in
 `src/policy/loader.ts` and add coverage to `test/loader.test.ts`.
 
+## Releasing a new version
+
+Releases are cut via git tag. The workflow at `.github/workflows/publish.yml`
+does the rest:
+
+```bash
+# 1. make sure you are on main with a clean tree
+git checkout main && git pull
+
+# 2. bump the package version (also creates the commit + tag)
+npm version patch    # or `minor` / `major` for breaking changes
+
+# 3. push the commit AND the tag
+git push --follow-tags
+```
+
+The workflow will:
+
+1. install, typecheck, run all 86 tests on Node 22;
+2. verify the tag (`v0.2.3`) matches `package.json` (`0.2.3`);
+3. run `npm publish --access public --provenance` signed by GitHub OIDC.
+
+The first-time publish requires one manual step: add an **NPM_TOKEN** secret
+to the repo. Generate it on npmjs.com under Access Tokens → Granular →
+"Publish" scope for the `yessir-cli` package, then add it as a repository
+secret at `https://github.com/shellonback/yessir-cli/settings/secrets/actions`.
+
+To dry-run the publish pipeline without pushing to npm, trigger the workflow
+manually from the GitHub Actions tab with `dry_run=true`.
+
 ## What we will likely decline
 
 - Features that require a hosted service.
