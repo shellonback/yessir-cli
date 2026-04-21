@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.5 — 2026-04-21
+
+Fewer false positives on everyday shell idioms.
+
+The previous metachar heuristic flagged `2>/dev/null`, `>file`, `<file`
+and `cat foo | wc -l` as "dangerous". These are ubiquitous and harmless,
+so `yessir init`'s default `allow: ls *` matched `ls /tmp` but escalated
+`ls /tmp 2>/dev/null`, which showed up constantly in Claude Code sessions
+(the agent loves suppressing stderr).
+
+- Wildcards (`*`) in command patterns now traverse single pipes and
+  redirects. So `ls *` matches `ls 2>/dev/null` and `cat *` matches
+  `cat foo | wc -l`.
+- Wildcards still refuse to cross chaining (`;`, `&`, `&&`, `||`),
+  backtick or `$(...)` / `<(...)` / `>(...)` substitution — i.e. the
+  tokens that can actually compose a new command.
+- The destructive heuristic follows the same rule: it now fires on
+  chaining + substitution + `&` only. Redirects and plain pipes are
+  no longer "manual" on their own.
+- `curl ... | bash` / `wget ... | sh` remain deny-listed via the
+  existing destructive regex — that specific pipe-to-shell pattern is
+  caught upstream, before the allow match.
+- 3 new tests + updated existing ones to lock the new behavior in
+  (104/104 green).
+
 ## 0.1.4 — 2026-04-21
 
 PTY wrapper compatibility on Node 25 + clearer error paths.

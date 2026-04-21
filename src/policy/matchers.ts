@@ -1,11 +1,18 @@
 // Command and path matching primitives.
 //
 // Commands use a wildcard glob restricted to `*` (any run of non-newline
-// characters except `|`, `>`, `<`, `;`, `&` when those are not in the pattern
-// itself). This keeps matching conservative: a pattern like `git diff *` does
-// not match `git diff HEAD && rm -rf .`.
+// characters except dangerous shell metachars when those are not in the
+// pattern itself). "Dangerous" here means tokens that can compose new
+// commands: chaining (`;`, `&&`, `||`), backgrounding (`&`), command
+// substitution (backtick, `$(...)`).
+//
+// Redirects (`>`, `<`, `>>`, `2>`, `&>`) and the humble pipe (`|`) are
+// explicitly NOT considered dangerous by themselves: they are ubiquitous in
+// everyday commands (`ls 2>/dev/null`, `cat foo | wc -l`). The genuinely
+// dangerous pipe-to-shell pattern (`curl … | bash`) is caught separately by
+// the destructive-heuristic regex in the policy engine.
 
-const COMMAND_SHELL_METACHARS = /[|&;<>`$]/;
+const COMMAND_DANGEROUS_METACHARS = /[&;`]|\$\(|<\(|>\(|\|\|/;
 
 export function normalizeCommand(input: string): string {
   return String(input).replace(/\s+/g, ' ').trim();
@@ -17,8 +24,12 @@ export function commandPatternToRegex(pattern: string): RegExp {
   for (let i = 0; i < norm.length; i++) {
     const ch = norm[i] ?? '';
     if (ch === '*') {
-      // `*` matches any run of non-shell-metachar, non-newline characters.
-      re += '[^|&;<>`$\\n]*';
+      // `*` matches any run of characters except the ones that can start a
+      // brand new command: chaining (`;`, `&`, `||`), backtick substitution,
+      // `$(...)` and process substitution. Single pipe and redirects are
+      // allowed — they are legitimate parts of everyday invocations. We use
+      // a negative lookahead `(?!\|)` so a lone `|` is fine but `||` is not.
+      re += '(?:[^&;`$\\n|]|\\|(?!\\|))*';
     } else if ('.+?^=!:${}()[]/\\'.includes(ch)) {
       re += '\\' + ch;
     } else {
@@ -46,7 +57,7 @@ export function matchCommand(command: string, patterns: readonly string[]): Comm
 }
 
 export function containsShellMetacharacters(command: string): boolean {
-  return COMMAND_SHELL_METACHARS.test(command);
+  return COMMAND_DANGEROUS_METACHARS.test(command);
 }
 
 // Minimal glob matcher for path patterns. Supports:
