@@ -17,8 +17,12 @@ import type { AiReviewer, ReviewerInput } from '../ai/reviewer';
 import type { Mode, Provider } from '../types';
 
 const LOG_RELATIVE_PATH = path.join('.yessir', 'yessir.log');
-const DEFAULT_IDLE_MS = 3_000;
-const POLL_INTERVAL_MS = 400;
+// Tight idle threshold: when Claude Code renders its "1. Yes / 2. No" dialog
+// we want to auto-inject the reply fast, not 3s later when the user has
+// already clicked. 500ms is long enough to avoid false triggers on mid-stream
+// output, short enough to feel immediate.
+const DEFAULT_IDLE_MS = 500;
+const POLL_INTERVAL_MS = 250;
 
 export interface RunOptions {
   cwd: string;
@@ -142,33 +146,40 @@ export async function runWrap(opts: RunOptions): Promise<number> {
     });
   }
 
-  // Collision guard: if the PreToolUse hook is already wired for Claude Code,
-  // running the PTY detector+writer loop on top of it creates double decisions
-  // and bleeds wrapper-level messages into the Claude TUI. Skip the detector
-  // unless the user explicitly opted in with --force-detector.
+  // Keep the PTY detector running even when the hook is wired: the hook
+  // decides BEFORE Claude renders the dialog when it can, and the detector
+  // clicks "1. Yes" / "2. No" for the user whenever the dialog does appear
+  // (hook timeout, reviewer failure, or the user removed the hook). That is
+  // the actual autoapprove experience yessir promises.
   const hookActive = opts.provider === 'claude' && hasYessirClaudeHook(cwd);
-  if (hookActive && !opts.forceDetector) {
-    stdout.write(
-      '\n[yessir] PreToolUse hook detected in .claude/settings.json — ' +
-        'disabling PTY detector (the hook already handles every tool call). ' +
-        'Pass --force-detector to keep both running.\n'
-    );
-    logger.info('run.detector_disabled', { reason: 'hook-present' });
+  if (hookActive) {
+    logger.info('run.detector_coexists_with_hook', {});
   }
 
   let lastHandledAt = 0;
+  // Remember the raw text of recently handled prompts so we don't re-click
+  // the same dialog on every poll tick. Bounded so it doesn't grow forever.
+  const handledPrompts: string[] = [];
+  const HANDLED_BUFFER = 24;
+  const markHandled = (raw: string) => {
+    if (!raw) return;
+    handledPrompts.push(raw);
+    if (handledPrompts.length > HANDLED_BUFFER) handledPrompts.shift();
+  };
+  const wasHandled = (raw: string) => handledPrompts.includes(raw);
+
   const poller = setInterval(async () => {
-    if (hookActive && !opts.forceDetector) return;
     if (exited) return;
     const snap = tailer.snapshot();
     if (snap.chars === 0) return;
     if (Date.now() - snap.lastUpdate < DEFAULT_IDLE_MS) return;
-    if (Date.now() - lastHandledAt < DEFAULT_IDLE_MS) return;
 
     const prompt = adapter.detect(snap.text);
     if (!prompt) return;
+    if (wasHandled(prompt.raw)) return;
 
     lastHandledAt = Date.now();
+    markHandled(prompt.raw);
     const engineDecision = engine.evaluate(prompt, {
       cwd,
       provider: opts.provider,

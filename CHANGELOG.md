@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.1.14 — 2026-04-21
+
+**Actually auto-click the dialog.** The whole point of the name yessir
+was that the Yes button gets pressed for you, not that the CLI emits
+JSON at an API. Until now the PTY detector stayed out of the way when
+the hook was wired, so whenever the hook fell through to "ask" (reviewer
+timeout, manual match, etc.) the user still had to press 1 themselves.
+
+- **Detector coexists with the hook.** Running `yessir claude` now
+  keeps the PTY detector active alongside the PreToolUse hook. Hook
+  handles allow/deny pre-dialog; detector handles whatever dialog
+  still renders (timeouts, require_manual with auto-approve enabled,
+  non-Claude providers without hooks).
+- **IDLE_THRESHOLD dropped from 3000ms to 500ms, poll 250ms.** Was
+  designed around a "wait for output to settle" heuristic that made
+  auto-click too slow — by the time the detector fired, the user had
+  already clicked. Tighter loop = snappier reply.
+- **Dedup on raw prompt text** so the detector does not re-click the
+  same dialog every tick while it's still on screen.
+- **Adapter writes the option number directly.** For Claude Code
+  numbered menus:
+    - approve → `1\r` (Yes)
+    - deny (2-opt menu `Yes/No`) → `2\r`
+    - deny (3-opt menu `Yes / Yes allow / No`) → `3\r`
+  Falls back to Enter / `n\r` only for classic `(Y/n)` confirmations.
+  More reliable than the old arrow-key sequence.
+
+133/133 green.
+
 ## 0.1.13 — 2026-04-21
 
 Reviewer default timeout bumped from 8s → 30s. `claude -p` cold-start

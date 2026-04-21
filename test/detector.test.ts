@@ -55,14 +55,41 @@ test('approve/deny bytes are correct per provider', () => {
   assert.equal(generic.denyBytes(prompt as never), 'n\r');
 });
 
-test('claude deny uses arrow navigation for numbered menus', () => {
+test('claude approve writes "1\\r" on numbered menus', () => {
   const claude = getAdapter('claude');
-  const prompt = {
+  const bytes = claude.approveBytes({
     kind: 'yes_no' as const,
-    raw: '1. Yes\n2. Yes, do not ask again\n3. No',
+    raw: '1. Yes   2. No',
     provider: 'claude' as const
-  };
-  const bytes = claude.denyBytes(prompt);
-  assert.ok(bytes.includes('\r'));
-  assert.ok(bytes.length >= 3);
+  });
+  assert.equal(bytes, '1\r');
+});
+
+test('claude deny picks the right numbered option for 2-opt and 3-opt menus', () => {
+  const claude = getAdapter('claude');
+  const twoOpt = claude.denyBytes({
+    kind: 'yes_no' as const,
+    raw: '1. Yes   2. No',
+    provider: 'claude' as const
+  });
+  assert.equal(twoOpt, '2\r');
+
+  const threeOpt = claude.denyBytes({
+    kind: 'yes_no' as const,
+    raw: '1. Yes   2. Yes, allow all edits during this session   3. No',
+    provider: 'claude' as const
+  });
+  assert.equal(threeOpt, '3\r');
+});
+
+test('claude deny falls back to n\\r on classic (y/N) confirmations', () => {
+  const claude = getAdapter('claude');
+  assert.equal(
+    claude.denyBytes({
+      kind: 'yes_no' as const,
+      raw: 'Continue? (y/N)',
+      provider: 'claude' as const
+    }),
+    'n\r'
+  );
 });

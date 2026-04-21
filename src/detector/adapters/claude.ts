@@ -107,18 +107,27 @@ export class ClaudeAdapter implements ProviderAdapter {
     return null;
   }
 
-  approveBytes(_prompt: DetectedPrompt): string {
-    // Claude Code's default action is Yes, pressing Enter selects it in both
-    // `(Y/n)` confirmations and numbered menus when index is already on "Yes".
+  approveBytes(prompt: DetectedPrompt): string {
+    // Claude Code menus accept the option number directly (`1\r`). That is
+    // more reliable than the older arrow-based scheme because the cursor
+    // might not start on option 1 after re-renders. Fall back to plain Enter
+    // only for classic `(Y/n)` confirmations where the default is already Yes.
+    if (/\b1\.\s+Yes/i.test(prompt.raw)) {
+      return '1\r';
+    }
     return '\r';
   }
 
   denyBytes(prompt: DetectedPrompt): string {
-    // For numbered menus Manager uses arrow-down twice + Enter. For classic
-    // y/n prompts a plain `n` + Enter is correct.
-    if (/\b1\.\s+Yes/i.test(prompt.raw) || /\b2\.\s+Yes/i.test(prompt.raw)) {
-      return '[B[B\r';
+    // 3-option menu: "1. Yes   2. Yes, allow…   3. No" → pick 3.
+    if (/\b2\.\s+Yes,?\s+(?:and|allow)/i.test(prompt.raw)) {
+      return '3\r';
     }
+    // 2-option menu: "1. Yes   2. No" → pick 2.
+    if (/\b2\.\s+No\b/i.test(prompt.raw) || /\b1\.\s+Yes/i.test(prompt.raw)) {
+      return '2\r';
+    }
+    // Classic (Y/n) confirmation.
     return 'n\r';
   }
 
